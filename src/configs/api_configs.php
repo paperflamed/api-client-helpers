@@ -11,6 +11,13 @@ return [
 	'file_routes' => [
 		'download',
 	],
+    'old_browsers' => [
+        'Chrome' => 31,
+        'MSIE' => 10,
+        'Firefox' => 30,
+        'Opera' => 20,
+        'Safari' => 535
+    ],
 	'client_id' 		=> env('client_id', 1),
     'client_secret' 	=> env('client_secret', 'abc'),
     'url'   			=> env('url', 'http://localhost:8001'),

@@ -36,5 +36,6 @@ class ApiClientHelpersServiceProvider extends ServiceProvider
         $this->app->make('Wizz\ApiClientHelpers\Token');
         $this->app->make('Wizz\ApiClientHelpers\ACHController');
         $this->app->make('Wizz\ApiClientHelpers\Middleware\BlockUrlsMiddleware');
+        $this->app->make('Wizz\ApiClientHelpers\Middleware\BrowserVersionMiddleware');
     }
 }
