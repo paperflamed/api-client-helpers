@@ -2,22 +2,32 @@
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use \Illuminate\Http\Request;
 
+function form_data_array_for_request(){
+    $data = (session('addition')) ? session('addition') : [];
+    $data = array_merge(request()->all(), $addition);
+    $data['ip'] = request()->ip();
+    $data['app_id'] = config('api_configs.client_id');
+    return $data;
+}
+
+function form_query_string_for_request(){
+
+}
+
 function apiRequestProxy(Request $request)
 {
     $path = $request->path();
+    // what is the purpose of this check here
     $path = strpos($path, '/') === 0 ? $path : '/'.$path;
     $requestString = str_replace(config('api_configs.url'), '', $path);
+    // get method from request
     $method = $request->method();
-    $data = $request->all();
+    // TODO mb use $_COOKIE here not $request->cookie()
     $cookie_string = getCookieStringFromArray($request->cookie());
-    $data['ip'] = $request->ip();
-    $data['app_id'] = config('api_configs.client_id');
-    $addition = (session('addition')) ? session('addition') : [];
-    $data = array_merge($data, $addition);
+    $data = form_data_array_for_request();
 
     $query = config('api_configs.secret_url').$requestString;
     $query .= ($method == "GET") ? '?'.http_build_query($data) : '';
-    session_write_close();
     $ch = curl_init(); 
     curl_setopt($ch, CURLOPT_URL, $query); 
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -27,11 +37,9 @@ function apiRequestProxy(Request $request)
     curl_setopt($ch, CURLOPT_COOKIE, $cookie_string);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
 
-    if (in_array($method, ["PUT", "POST", "DELETE"])) 
-    {
+    if (in_array($method, ["PUT", "POST", "DELETE"])) {
         
-        if (array_get($data, 'files')) 
-        {
+        if (array_get($data, 'files')) {
             $data['files'] = prepare_files_for_curl($data);
         }
 
@@ -54,6 +62,7 @@ function getFilenameFromHeader($contentDisposition)
     return $filename;
 }
 
+// TODO bad function
 function getPathFromHeaderOrRoute($contentDisposition, $slug)
 {
     if ($contentDisposition) {
@@ -88,4 +97,29 @@ function prepare_files_for_curl(array $data, $file_field = 'files')
         } 
     }
     return $files;
+}
+
+    /*
+
+    Function to see if we should be caching response from frontend repo.
+
+    If $slug is passed, it will also check whether this $slug is already in cache;
+
+    */
+function should_we_cache($slug = false)
+{
+    if(env('use_cache_frontend') === false) return false;
+
+    if(request()->input('cache') === 'false') return false;
+
+    if(!app()->environment('production')) return false;
+
+    if($slug && !Cache::has($slug)) return false;
+
+    return true;
+}
+
+
+function request_string_contains_redirect(){
+    return preg_match('/^HTTP\/\d\.\d\s+(301|302)/', $string);
 }

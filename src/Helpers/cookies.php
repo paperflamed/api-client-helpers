@@ -8,12 +8,10 @@ function parse_cookies($header, $named = true) {
 		$cookie = [];
 	foreach ($parts as $i => $part) {
 		$cook = explode("=",$part);
-		if ($i == 0 && $named) 
-		{
+		if ($i == 0 && $named) {
 			$cookie['name'] = trim($cook[0]);
 			$cookie['value'] = $cook[1];
-		} else
-		{
+		} else{
 			$cookie[trim($cook[0])] = (array_key_exists(1, $cook)) ? $cook[1] : '';
 		}
 	}
@@ -41,14 +39,12 @@ function setCookiesFromCurlResponse($headers)
 {
 	preg_match_all('/Set-Cookie: (.*)\b/', $headers, $cookies);
 	$cooks = [];
-	$cookies = $cookies[1];
-	foreach($cookies as $rawCookie) {
+	foreach($cookies[1] as $rawCookie) {
 		$cookie = parse_cookies($rawCookie);
 		$cooks[] = $cookie;
 		$minutes = new \Carbon\Carbon($cookie['expires']);
 		$minutes = $minutes->diffInMinutes(\Carbon\Carbon::now());
-		$cookie = cookie($cookie['name'], $cookie['value'], $minutes, $cookie['path']);
-		Cookie::queue($cookie);
+		Cookie::queue(cookie($cookie['name'], $cookie['value'], $minutes, $cookie['path']));
 	}
 	return $cooks;
 }

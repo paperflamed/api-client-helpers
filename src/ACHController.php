@@ -17,92 +17,15 @@ class ACHController extends Controller
     public function __construct()
     {
         $one = "Sorry, looks like something went wrong. ";
-
         $two = (env('support_email')) ? "Please contact us at <a href='mailto:".env('support_email')."'>".env('support_email')."</a>" : "Please contact us via email";
-
         $three = ' for further assistance.';
 
         $this->error_message = $one.$two.$three;
         $this->security_code = config('api_configs.security_code');
         $this->redirect_code = config('api_configs.not_found_redirect_code', 301);
         $this->redirect_mode = config('api_configs.not_found_redirect_mode');
-
         $this->version = "1.2";
 
-    }
-
-    /*
-
-    Little helper for our check function.
-
-    */
-    protected function is_ok($func)
-    {
-        return ($this->$func()) ? 'OK' : 'OFF';
-    }
-
-    /*
-
-    Validating that all our configs necessary for frontend repo are in place.
-
-    */
-    protected function validate_frontend_config()
-    {
-        if(! env('frontend_repo_url')) return false;
-
-        if(substr(env('frontend_repo_url'), -1) != '/') return false;
-
-        return true;
-    }
-
-    /*
-
-    Validating that all our configs necessary for redirect are in place.
-
-    */
-    protected function validate_redirect_config()
-    {
-        if(! env('secret_url')) return false;
-
-        return true;
-    }
-
-    /*
-
-    Function to see if we should be caching response from frontend repo.
-
-    If $slug is passed, it will also check whether this $slug is already in cache;
-
-    */
-    protected function should_we_cache($slug = false)
-    {
-        if(env('use_cache_frontend') === false) return false;
-
-        if(request()->input('cache') === 'false') return false;
-
-        if(!app()->environment('production')) return false;
-
-        if($slug && !Cache::has($slug)) return false;
-
-        return true;
-    }
-
-    protected function CK($slug) //CK = Cache Key
-    {
-        $ua = strtolower(request()->header('User-Agent'));
-        if($ua && strrpos($ua, 'msie') > -1)
-        {
-            $slug = "_ie_".$slug;
-        }
-        return $slug;
-    }
-
-    public function splitUrlIntoSegments($url)
-    {
-        $url_without_query_string = explode('?', $url)[0];
-        return array_values(array_filter(explode('/', $url_without_query_string), function ($var) {
-            return ($var) ? true : false;
-        }));
     }
 
     /*
@@ -113,16 +36,14 @@ class ACHController extends Controller
     public function frontend_repo($slug, Request $req)
     {
         $additions = request()->all();
-        if ($additions) {
-            session(['addition' => $additions]);
-        }
+        if ($additions) session(['addition' => $additions]);
 
-        if(!$this->validate_frontend_config()) return $this->error_message;
+        if(!validate_frontend_config()) return $this->error_message;
 
         if(!config('api_configs.multidomain_mode'))
         {
-            if ($this->should_we_cache($this->CK($slug))) {
-                $page = Cache::get($this->CK($slug));
+            if (should_we_cache(CK($slug))) {
+                $page = Cache::get(CK($slug));
                 $page = str_replace('<head>', "<head><script>window.csrf='".csrf_token()."'</script>", $page);
                 return $page;
             }
@@ -147,7 +68,7 @@ class ACHController extends Controller
                 ];
 
                 //getting language from url
-                $url_segments = $this->splitUrlIntoSegments($req->path());
+                $url_segments = splitUrlIntoSegments($req->path());
                 $langFromUrl = array_get($url_segments, 0, 'ru');
                 $langFromUrl = array_search($langFromUrl, $languages) >= 0 ? $langFromUrl : 'ru';
 
@@ -234,7 +155,7 @@ class ACHController extends Controller
                 }
             }
 
-            if ($this->should_we_cache()) Cache::put($this->CK($slug), $page, config('api_configs.cache_frontend_for'));
+            if (should_we_cache()) Cache::put(CK($slug), $page, config('api_configs.cache_frontend_for'));
             $page = str_replace('<head>', "<head><script>window.csrf='".csrf_token()."'</script>", $page);
 
             return $page;
@@ -254,7 +175,7 @@ class ACHController extends Controller
     */
     public function clear_cache()
     {
-        if(request()->input('code') !== $this->security_code) return ['result' => 'no access'];;
+        if(request()->input('code') !== $this->security_code) return ['result' => 'no access'];
         try {
             \Artisan::call('cache:clear');
             return ['result' => 'success'];
@@ -263,43 +184,6 @@ class ACHController extends Controller
             return ['result' => 'error'];
         }
     }
-
-    protected $file_types = [
-        'image/jpeg',
-        'image/png',
-        'image/tiff',
-        'text/csv',
-        'audio/basic',
-        'audio/L24',
-        'audio/mp4',
-        'audio/aac',
-        'audio/mpeg',
-        'audio/ogg',
-        'audio/vorbis',
-        'audio/x-ms-wma',
-        'audio/x-ms-wax',
-        'audio/vnd.rn-realaudio',
-        'audio/vnd.wave',
-        'audio/webm: WebM',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'application/pdf',
-        'application/msword',
-        'application/vnd.ms-excel',
-        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        'application/vnd.ms-powerpoint',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'text/plain',
-        'text/plain; charset=UTF-8',
-
-    ];
-
-    protected $view_types = [
-        'text/html;charset=UTF-8',
-        'text/html; charset=UTF-8',
-        'text/html',
-        'text/html;charset=ISO-8859-1',
-        'text/html; charset=ISO-8859-1',
-    ];
     /*
 
     Prozy function for api by @wizz.
@@ -312,14 +196,12 @@ class ACHController extends Controller
         $data = explode("\r\n\r\n", $res);
         $data2 = http_parse_headers($res);
 
-        if(preg_match('/^HTTP\/\d\.\d\s+(301|302)/',$data[0]))
-        {
+        if(request_string_contains_redirect($data[0])){
             $headers = array_get(http_parse_headers($data[0]), 0);
-            return redirect()
-                ->to(array_get($headers, 'location'))
-                ->header('referer', 'https://api.speedy.company');
+            return redirect()->to(array_get($headers, 'location'));
         }
         $cookies = setCookiesFromCurlResponse($res);
+        // TODO: try to use only 1 data
         $headers = (count($data2) == 3) ? $data2[1] : $data2[0];
         $res = (count($data) == 3) ? $data[2] : $data[1];
 
@@ -328,21 +210,14 @@ class ACHController extends Controller
             case 'application/json':
                 return response()->json(json_decode($res));
                 break;
-            case in_array($content_type, $this->view_types):
+            case strrpos('q'.$content_type, 'text/html'):
                 return $res;
                 break;
             case 'text/plain':
                 return $res;
                 break;
-            case in_array($content_type, $this->file_types):
-                $shit = array_get($headers, 'cache-disposition', array_get($headers, 'content-disposition'));
-                $path = getPathFromHeaderOrRoute($shit, $slug);
-                file_put_contents($path, $res);
-                return response()->download($path);
-                break;
             case "application/xml":
-                $xml = new \SimpleXMLElement($res);
-                return $xml->asXML();
+                return (new \SimpleXMLElement($res))->asXML();
                 break;
             case 'text/plain; charset=UTF-8':
                 $filename = getFilenameFromHeader(array_get($headers, 'content-disposition'));
@@ -352,18 +227,18 @@ class ACHController extends Controller
                 $shit = array_get($headers, 'cache-disposition', array_get($headers, 'content-disposition'));
                 $path = getPathFromHeaderOrRoute($shit, $slug);
                 file_put_contents($path, $res);
+                //TODO return file without download
                 return response()->download($path);
                 break;
         }
-        if (strpos('q'.$res, 'Whoops,')) {
-            if (! json_decode($res)) {
+        // TODO change to handle status
 
-                return response()->json([
-                    'status' => 400,
-                    'errors' => [$this->error_message],
-                    'alerts' => []
-                ]);
-            }
+        if (array_get($headers, 'status') == 500 && !json_decode($res)) {
+            return response()->json([
+                'status' => 400,
+                'errors' => [$this->error_message],
+                'alerts' => []
+            ]);
         }
     }
 
@@ -375,7 +250,7 @@ class ACHController extends Controller
     public function redirect($slug, Request $request)
     {
 
-        if(!$this->validate_redirect_config()) return $this->error_message;
+        if(!validate_redirect_config()) return $this->error_message;
 
         return redirect()->to(env('secret_url').'/'.$slug.'?'.http_build_query($request->all()));
     }
@@ -390,9 +265,9 @@ class ACHController extends Controller
         if(request()->input('code') !== $this->security_code) return;
 
         return [
-            'frontend_repo' => $this->is_ok('validate_frontend_config'),
-            'redirect' => $this->is_ok('validate_redirect_config'),
-            'caching' => $this->is_ok('should_we_cache'),
+            'frontend_repo' => is_ok('validate_frontend_config'),
+            'redirect' => is_ok('validate_redirect_config'),
+            'caching' => is_ok('should_we_cache'),
             'version' => $this->version
         ];
     }
