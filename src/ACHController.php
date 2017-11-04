@@ -156,9 +156,7 @@ class ACHController extends Controller
             }
 
             if (should_we_cache()) Cache::put(CK($slug), $page, config('api_configs.cache_frontend_for'));
-            $page = str_replace('<head>', "<head><script>window.csrf='".csrf_token()."'</script>", $page);
-
-            return $page;
+            return str_replace('<head>', "<head><script>window.csrf='".csrf_token()."'</script>", $page);
 
         }
         catch (Exception $e)
@@ -192,7 +190,8 @@ class ACHController extends Controller
     public function proxy($slug = '/')
     {
         $method = array_get($_SERVER, 'REQUEST_METHOD');
-        $res = apiRequestProxy(request());
+        $res = apiRequestProxy();
+        setCookiesFromCurlResponse($res);
         $data = explode("\r\n\r\n", $res);
         $data2 = http_parse_headers($res);
 
@@ -200,7 +199,7 @@ class ACHController extends Controller
             $headers = array_get(http_parse_headers($data[0]), 0);
             return redirect()->to(array_get($headers, 'location'));
         }
-        $cookies = setCookiesFromCurlResponse($res);
+
         // TODO: try to use only 1 data
         $headers = (count($data2) == 3) ? $data2[1] : $data2[0];
         $res = (count($data) == 3) ? $data[2] : $data[1];
@@ -219,6 +218,7 @@ class ACHController extends Controller
             case "application/xml":
                 return (new \SimpleXMLElement($res))->asXML();
                 break;
+            // can be commented
             case 'text/plain; charset=UTF-8':
                 $filename = getFilenameFromHeader(array_get($headers, 'content-disposition'));
                 if ($filename == 'robots.txt') file_put_contents(public_path().'/robots.txt',$res);

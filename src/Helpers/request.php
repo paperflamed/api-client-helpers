@@ -10,22 +10,15 @@ function form_data_array_for_request(){
     return $data;
 }
 
-function form_query_string_for_request(){
 
-}
-
-function apiRequestProxy(Request $request)
-{
-    $path = $request->path();
+function apiRequestProxy(){
+    $path = $_SERVER['PATH_INFO'];
     // what is the purpose of this check here
     $path = strpos($path, '/') === 0 ? $path : '/'.$path;
     $requestString = str_replace(config('api_configs.url'), '', $path);
     // get method from request
-    $method = $request->method();
-    // TODO mb use $_COOKIE here not $request->cookie()
-    $cookie_string = getCookieStringFromArray($request->cookie());
+    $method = $_SERVER['REQUEST_METHOD'];
     $data = form_data_array_for_request();
-
     $query = config('api_configs.secret_url').$requestString;
     $query .= ($method == "GET") ? '?'.http_build_query($data) : '';
     $ch = curl_init(); 
@@ -34,15 +27,15 @@ function apiRequestProxy(Request $request)
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
     curl_setopt($ch, CURLOPT_HEADER, true); 
     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method); 
-    curl_setopt($ch, CURLOPT_COOKIE, $cookie_string);
+    curl_setopt($ch, CURLOPT_COOKIE, getCookieStringFromArray());
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
 
     if (in_array($method, ["PUT", "POST", "DELETE"])) {
-        
+        // make recursive iterator over all fields
         if (array_get($data, 'files')) {
             $data['files'] = prepare_files_for_curl($data);
         }
-
+        // is it nessesary at all?
         $data = ($method == "POST") ? array_sign($data) : http_build_query($data);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
     }
@@ -84,16 +77,10 @@ function getPathFromHeaderOrRoute($contentDisposition, $slug)
 
 function prepare_files_for_curl(array $data, $file_field = 'files')
 {
-    $files = array_pull($data, $file_field);
-    $files = array_sign($files);
-    foreach ($files as $key => $file) 
-    {
-        if (is_object($file) && $file instanceof UploadedFile) 
-        {
-            $tmp_name = $file->getRealPath();
-            $name = $file->getClientOriginalName();
-            $type = $file->getMimeType();
-            $files[$key] = new CURLFile($tmp_name, $type, $name);
+    $files = array_sign(array_pull($data, $file_field));
+    foreach ($files as $key => $file) {
+        if (is_object($file) && $file instanceof UploadedFile) {
+            $files[$key] = new CURLFile($file->getRealPath(), $file->getMimeType(), $file->getClientOriginalName());
         } 
     }
     return $files;

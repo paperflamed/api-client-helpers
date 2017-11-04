@@ -18,10 +18,10 @@ function parse_cookies($header, $named = true) {
 	return $cookie;
 }
 
-function getCookieStringFromArray(array $cookies)
+function getCookieStringFromArray()
 {
  	$cookies_string = '';
-	foreach ($cookies as $cookieName => $cookieValue) {
+	foreach ($_COOKIE as $cookieName => $cookieValue) {
 		$cookies_string .= $cookieName.'='.$cookieValue.'; ';
 	}
  	return $cookies_string;
