@@ -34,4 +34,13 @@ That's all.
 All routes with prefix api will be proxy redirected to secret_url from .env file.
 
 
+What should be checked:
+1. proxy all requests
+2. proxy files of different structures
+3. receive files of different types
+4. receive 
+
+
+write multiling docs
+
 

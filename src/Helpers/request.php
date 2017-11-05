@@ -3,7 +3,7 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
 use \Illuminate\Http\Request;
 
 function form_data_array_for_request(){
-    $data = (session('addition')) ? session('addition') : [];
+    $data = session('addition') ? session('addition') : [];
     $data = array_merge(request()->all(), $addition);
     $data['ip'] = request()->ip();
     $data['app_id'] = config('api_configs.client_id');

@@ -30,8 +30,6 @@ class ACHController extends Controller
 
     /*
 
-<<<<<<< HEAD
-=======
     Little helper for our check function.
 
     */
@@ -78,15 +76,11 @@ class ACHController extends Controller
         }
 
         $input = array_merge($input, $conf);
-        if(array_key_exists('page', $input)) unset($input['page']);
-        
         session(['addition' => $input]);
-        if(!$this->validate_frontend_config()) return $this->error_message;
+        if(!validate_frontend_config()) return $this->error_message;
         
         $ck = CK($slug);
-        if (should_we_cache($ck)) {
-            return insertToken(Cache::get($ck));
-        }
+        if (should_we_cache($ck)) return insertToken(Cache::get($ck));
 
         try {
             $front = $conf['frontend_repo_url'];
@@ -97,18 +91,13 @@ class ACHController extends Controller
 
             $url = ($slug == '/') ? $front : $front.$slug;
             $query = [];
-            $domain = $req->url();
-
-            if (array_search(parse_url($domain)['host'], $conf['multilingualSites']) !== false)
-            {
-                $url_segments = splitUrlIntoSegments($req->path());
+            if (isset($conf['multilingualSites'][$_SERVER['SERVER_NAME']])){
                 $main_language = $conf['main_language'] ? $conf['main_language'] : 'en';
-                $language_from_url = array_get($url_segments, 0, $main_language);
+                $language_from_url = request()->segment(1) ? request()->segment(1) : $main_language;
                 $language_from_url = gettype(array_search($language_from_url, $conf['languages'])) == 'integer' ? $language_from_url : $main_language;
 
                 //if user tries to change language via switcher rewrite language_from_request cookie
-                if ($req->input('change_lang'))
-                {
+                if ($req->input('change_lang')){
                     setcookie('language_from_request', $req->input('change_lang'), time() + 60 * 30, '/');
                     $_COOKIE['language_from_request'] = $req->input('change_lang');
                     if ($language_from_url !== $req->input('change_lang'))
@@ -116,32 +105,24 @@ class ACHController extends Controller
                         return redirect($req->input('change_lang') == $main_language ? '/' : '/' . $req->input('change_lang') . '/ ');
                     }
                 }
-                if ($req->get('l') == $main_language)
-                {
+                if ($req->get('l') == $main_language){
                     setcookie('language_from_request', $main_language, time() + 60 * 30, '/');
                     $query = [
                         'lang' => $main_language,
                         'main_language' => $conf['main_language']
                     ];
                 }
-                if ($slug == '/' && $req->get('l') !== $main_language)
-                {
-                    if (!array_key_exists("language_from_request", $_COOKIE))
-                    {
+                if ($slug == '/' && $req->get('l') !== $main_language){
+                    if (!array_key_exists("language_from_request", $_COOKIE)){
                         //setting language_from_request cookie from accept-language
                         $language_from_request = substr(locale_accept_from_http($req->header('accept-language')), 0, 2);
                         $language_from_request = gettype(array_search($language_from_request, $conf['languages'])) == 'boolean' ? $main_language : $language_from_request;
                         setcookie('language_from_request', $language_from_request, time() + 60 * 30, '/');
-                        if ($language_from_url !== $language_from_request)
-                        {
+                        if ($language_from_url !== $language_from_request){
                             return redirect($language_from_request == $main_language ? '/' : '/' . $language_from_request . '/ ');
                         }
-                    }
-                    else {
-                        if ($language_from_url !== $_COOKIE['language_from_request'])
-                        {
-                            return redirect($_COOKIE['language_from_request'] == $main_language ? '/' : '/' . $_COOKIE['language_from_request'] . '/ ');
-                        }
+                    } elseif ($language_from_url !== $_COOKIE['language_from_request']){
+                        return redirect($_COOKIE['language_from_request'] == $main_language ? '/' : '/' . $_COOKIE['language_from_request'] . '/ ');
                     }
                 }
                 $query = [
@@ -158,11 +139,9 @@ class ACHController extends Controller
             {
                 // code 238 is used for our internal communication between frontend repo and client site,
                 // so that we do not ignore errors (410 is an error);
-                if($this->redirect_mode === "view")
-                {
+                if($this->redirect_mode === "view") {
                     return response(view('api-client-helpers::not_found'), $this->redirect_code);
-                }
-                else { // changed this to else, so that we use http redirect by default even if nothing is specified
+                } else { // changed this to else, so that we use http redirect by default even if nothing is specified
                     return redirect()->to('/', $this->redirect_code);
                 }
             }
@@ -216,28 +195,28 @@ class ACHController extends Controller
 
         $content_type = array_get($headers, 'content-type');
         switch ($content_type) {
-            case 'application/json':
+            case strrpos('q'.$content_type, 'application/json'):
                 return response()->json(json_decode($res));
                 break;
             case strrpos('q'.$content_type, 'text/html'):
                 return $res;
                 break;
-            case 'text/plain':
+            case strrpos('q'.$content_type, 'text/plain'):
                 return $res;
                 break;
-            case "application/xml":
+            case strrpos('q'.$content_type, 'application/xml'):
                 return (new \SimpleXMLElement($res))->asXML();
                 break;
             default:
                 $shit = array_get($headers, 'cache-disposition', array_get($headers, 'content-disposition'));
                 $path = getPathFromHeaderOrRoute($shit, $slug);
-                file_put_contents($path, $res);
                 //TODO return file without download
-                return response()->download($path);
+                return response($res)
+                    ->header('Content-Type', $content_type)
+                    ->header('Content-Disposition', 'attachment; filename="'.$path.'"');
                 break;
         }
         // TODO change to handle status
-
         if (array_get($headers, 'status') == 500 && !json_decode($res)) {
             return response()->json([
                 'status' => 400,
