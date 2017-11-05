@@ -218,11 +218,6 @@ class ACHController extends Controller
             case "application/xml":
                 return (new \SimpleXMLElement($res))->asXML();
                 break;
-            // can be commented
-            case 'text/plain; charset=UTF-8':
-                $filename = getFilenameFromHeader(array_get($headers, 'content-disposition'));
-                if ($filename == 'robots.txt') file_put_contents(public_path().'/robots.txt',$res);
-                break;
             default:
                 $shit = array_get($headers, 'cache-disposition', array_get($headers, 'content-disposition'));
                 $path = getPathFromHeaderOrRoute($shit, $slug);
