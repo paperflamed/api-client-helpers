@@ -2,6 +2,34 @@
 use Illuminate\Http\Request;
 
 
+function insertToken($page) {
+	return str_replace('<head>', "<head><script>window.csrf='".csrf_token()."'</script>", $page);
+}
+
+function arrContextOptions(){
+	return array(
+                "ssl" => array(
+                    "verify_peer" => false,
+                    "verify_peer_name" => false,
+                    'follow_location' => 1,
+                    'method' => "GET",
+                    'header' => 'User-Agent: '.request()->header('user-agent').'\r\n',
+                    // 'ignore_errors' => true
+                ),
+                'http' => array(
+                    'method'=>"GET",
+                    'follow_location' => 1,
+                    'header' => [
+                        'User-Agent: '.request()->header('user-agent').'\r\n',
+                        'Referrer: '.asset('/').'\r\n',
+                    ],
+
+                    // 'ignore_errors' => true
+                )
+            );
+
+}
+
 function parse_cookies($header, $named = true) {
 	
 	$parts = explode(";",$header);

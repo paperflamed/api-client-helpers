@@ -30,115 +30,128 @@ class ACHController extends Controller
 
     /*
 
+<<<<<<< HEAD
+=======
+    Little helper for our check function.
+
+    */
+    protected function is_ok($func)
+    {
+        return ($this->$func()) ? 'OK' : 'OFF';
+    }
+
+    /*
+
+    Validating that all our configs necessary for frontend repo are in place.
+
+    */
+    protected function validate_frontend_config()
+    {
+        if(! env('frontend_repo_url')) return false;
+
+        if(substr(env('frontend_repo_url'), -1) != '/') return false;
+
+        return true;
+    }
+
+    /*
+
     The actual function for handling frontend repo requests.
 
     */
     public function frontend_repo($slug, Request $req)
     {
-        $additions = request()->all();
-        if ($additions) session(['addition' => $additions]);
+        $input = request()->all();
+        $input['domain'] = request()->root();
+        $conf = $this->from_config();
 
-        if(!validate_frontend_config()) return $this->error_message;
+        if ($conf['tracking_hits']){
+            //store hit and write hit_id in cookie
+            $hitsQuery = [
+                'rt' => array_get($input, 'rt', null),
+                'client_id' => $conf['client_id'],
+            ];
+            $query = env('secret_url') . '/hits/?' . http_build_query($hitsQuery);
+            $res = file_get_contents($query);
+            $res = json_decode($res)->data;
+            \Cookie::queue('hit_id', $res->id, time()+60*60*24*30, '/');
+        }
 
-        if(!config('api_configs.multidomain_mode'))
-        {
-            if (should_we_cache(CK($slug))) {
-                $page = Cache::get(CK($slug));
-                $page = str_replace('<head>', "<head><script>window.csrf='".csrf_token()."'</script>", $page);
-                return $page;
-            }
+        $input = array_merge($input, $conf);
+        if(array_key_exists('page', $input)) unset($input['page']);
+        
+        session(['addition' => $input]);
+        if(!$this->validate_frontend_config()) return $this->error_message;
+        
+        $ck = CK($slug);
+        if (should_we_cache($ck)) {
+            return insertToken(Cache::get($ck));
         }
 
         try {
+            $front = $conf['frontend_repo_url'];
+            
+            if(config('api_configs.multidomain_mode_dev') || config('api_configs.multidomain_mode')) {
+                $slug = !strlen($slug) ? $slug : '/';
+            }
 
-            $url = ($slug == '/') ? env('frontend_repo_url') : env('frontend_repo_url').$slug;
-            $url = $url . '?' . http_build_query($req->all());
-
-            //checking sites with multilingual
-            $multilingualSites = [
-                'dev.educashion.net',
-            ];
-
+            $url = ($slug == '/') ? $front : $front.$slug;
+            $query = [];
             $domain = $req->url();
-            if (array_search(parse_url($domain)['host'], $multilingualSites) !== false)
-            {
-                $languages = [
-                    'ru',
-                    'en',
-                ];
 
-                //getting language from url
+            if (array_search(parse_url($domain)['host'], $conf['multilingualSites']) !== false)
+            {
                 $url_segments = splitUrlIntoSegments($req->path());
-                $langFromUrl = array_get($url_segments, 0, 'ru');
-                $langFromUrl = array_search($langFromUrl, $languages) >= 0 ? $langFromUrl : 'ru';
+                $main_language = $conf['main_language'] ? $conf['main_language'] : 'en';
+                $language_from_url = array_get($url_segments, 0, $main_language);
+                $language_from_url = gettype(array_search($language_from_url, $conf['languages'])) == 'integer' ? $language_from_url : $main_language;
 
                 //if user tries to change language via switcher rewrite language_from_request cookie
                 if ($req->input('change_lang'))
                 {
                     setcookie('language_from_request', $req->input('change_lang'), time() + 60 * 30, '/');
                     $_COOKIE['language_from_request'] = $req->input('change_lang');
-                    if ($langFromUrl !== $req->input('change_lang'))
+                    if ($language_from_url !== $req->input('change_lang'))
                     {
-                        return redirect($req->input('change_lang') == 'ru' ? '/' : '/' . $req->input('change_lang') . '/ ');
+                        return redirect($req->input('change_lang') == $main_language ? '/' : '/' . $req->input('change_lang') . '/ ');
                     }
                 }
-                if ($slug == '/')
+                if ($req->get('l') == $main_language)
+                {
+                    setcookie('language_from_request', $main_language, time() + 60 * 30, '/');
+                    $query = [
+                        'lang' => $main_language,
+                        'main_language' => $conf['main_language']
+                    ];
+                }
+                if ($slug == '/' && $req->get('l') !== $main_language)
                 {
                     if (!array_key_exists("language_from_request", $_COOKIE))
                     {
                         //setting language_from_request cookie from accept-language
-                        $langFromRequest = substr(locale_accept_from_http($req->header('accept-language')), 0, 2);
-                        setcookie('language_from_request', $langFromRequest, time() + 60 * 30, '/');
-                        if ($langFromUrl !== $langFromRequest)
+                        $language_from_request = substr(locale_accept_from_http($req->header('accept-language')), 0, 2);
+                        $language_from_request = gettype(array_search($language_from_request, $conf['languages'])) == 'boolean' ? $main_language : $language_from_request;
+                        setcookie('language_from_request', $language_from_request, time() + 60 * 30, '/');
+                        if ($language_from_url !== $language_from_request)
                         {
-                            return redirect($langFromRequest == 'ru' ? '/' : '/' . $langFromRequest . '/ ');
+                            return redirect($language_from_request == $main_language ? '/' : '/' . $language_from_request . '/ ');
                         }
                     }
-                    else
-                    {
-                        if ($langFromUrl !== $_COOKIE['language_from_request'])
+                    else {
+                        if ($language_from_url !== $_COOKIE['language_from_request'])
                         {
-                            return redirect($_COOKIE['language_from_request'] == 'ru' ? '/' : '/' . $_COOKIE['language_from_request'] . '/ ');
+                            return redirect($_COOKIE['language_from_request'] == $main_language ? '/' : '/' . $_COOKIE['language_from_request'] . '/ ');
                         }
                     }
                 }
+                $query = [
+                    'lang' => $language_from_url,
+                    'main_language' => $conf['main_language']
+                ];
             }
+            $url = $url . '?' . http_build_query(array_merge($req->all(), $query));
+            $page = file_get_contents($url, false, stream_context_create(arrContextOptions()));
 
-            $arrContextOptions = array(
-                "ssl" => array(
-                    "verify_peer" => false,
-                    "verify_peer_name" => false,
-                    'follow_location' => 1,
-                    'method' => "GET",
-                    'header' => 'User-Agent: '.request()->header('user-agent').'\r\n',
-                    // 'ignore_errors' => true
-                ),
-                'http' => array(
-                    'method'=>"GET",
-                    'follow_location' => 1,
-                    'header' => [
-                        'User-Agent: '.request()->header('user-agent').'\r\n',
-                        'Referrer: '.asset('/').'\r\n',
-                    ],
-
-                    // 'ignore_errors' => true
-                )
-            );
-
-            if(config('api_configs.multidomain_mode'))
-            {
-                if(app()->environment('production')) 
-                {
-                    $new_url = preg_replace('|[^\d\w ]+|i', '-', $_SERVER['HTTP_HOST']);
-                    $url = 'https://pbnapi.site.supplies/'.$new_url.$_SERVER['REQUEST_URI'];
-                } 
-                else 
-                {
-                    $url = 'http://localhost:8000'.$_SERVER['REQUEST_URI'];
-                }
-            }
-
-            $page = file_get_contents($url, false, stream_context_create($arrContextOptions));
             $http_code = array_get($http_response_header, 0, 'HTTP/1.1 200 OK');
 
             if(strpos($http_code, '238') > -1)
@@ -149,19 +162,16 @@ class ACHController extends Controller
                 {
                     return response(view('api-client-helpers::not_found'), $this->redirect_code);
                 }
-                else //if($this->redirect_mode === "http")
-                { // changed this to else, so that we use http redirect by default even if nothing is specified
+                else { // changed this to else, so that we use http redirect by default even if nothing is specified
                     return redirect()->to('/', $this->redirect_code);
                 }
             }
-
-            if (should_we_cache()) Cache::put(CK($slug), $page, config('api_configs.cache_frontend_for'));
-            return str_replace('<head>', "<head><script>window.csrf='".csrf_token()."'</script>", $page);
-
+            if ($this->should_we_cache()) Cache::put($ck, $page, $conf['cache_frontend_for']);
+            return insertToken($page);
         }
         catch (Exception $e)
         {
-            \Log::info($e);
+            // \Log::info($e);
             return $this->error_message;
         }
     }
@@ -178,7 +188,7 @@ class ACHController extends Controller
             \Artisan::call('cache:clear');
             return ['result' => 'success'];
         } catch (Exception $e) {
-            \Log::info($e);
+            // \Log::info($e);
             return ['result' => 'error'];
         }
     }
@@ -267,4 +277,33 @@ class ACHController extends Controller
         ];
     }
 
+    public function from_config() 
+    {
+        $uri_host = explode('/', request()->getRequestUri());
+        $host = $uri_host[1];
+
+        if (config('api_configs.multidomain_mode_dev') && $uri_host[1]) {
+            $dom = config('api_configs.change_project.'.$host);
+        } else {
+            $has_multidomain = config('api_configs.multidomain_mode') && app()->environment('local'); 
+            $host = !$has_multidomain ? request()->getHttpHost() : $host;
+            $dom = preg_replace('|[^\d\w ]+|i', '-', $host);
+        }
+        $keys = [
+            'client_id',
+            'frontend_repo_url',
+            'main_language',
+            'multilingualSites',
+            'languages',
+            'tracking_hits',
+            'cache_frontend_for'
+        ];
+        $has_domains = array_key_exists($dom, config('api_configs.domains')); 
+        $str = $has_domains ? 'api_configs.domains.'.$dom.'.' : 'api_configs.';
+        
+        foreach ($keys as $key) {
+            $conf[$key] = config($str.$key);
+        }
+        return $conf;
+    }
 }
