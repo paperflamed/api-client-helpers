@@ -27,7 +27,9 @@ class BlockUrlsMiddleware
 
         if($referrer_has_gov || $utm_host_has_gov) return redirect("https://google.com");
     
-        foreach (conf('list_of_urls_to_block') as $url => $destination) {
+        $list_of_urls_to_block = conf('list_of_urls_to_block') ? conf('list_of_urls_to_block') : [];
+
+        foreach ($list_of_urls_to_block as $url => $destination) {
             
             $host = $utm_host && strpos($utm_host, $url) !== false ? $utm_host : false;
             $host = !$host && $utm_referrer && strpos($utm_referrer, $url) !== false ? $utm_referrer : $host;

@@ -64,8 +64,7 @@ class ACHController extends Controller
             //     $slug = !strlen($slug) ? $slug : '/';
             // }
 
-            // $url = ($slug == '/') ? $front : $front.$slug;
-            $query = [];
+            $url = ($slug == '/') ? $front : $front.$slug;
             // $domain = $req->url();
             // cut shit from here
            
