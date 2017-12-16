@@ -34,14 +34,6 @@ class ACHController extends Controller
 
     }
 
-    // public function splitUrlIntoSegments($url)
-    // {
-    //     $url_without_query_string = explode('?', $url)[0];
-    //     return array_values(array_filter(explode('/', $url_without_query_string), function ($var) {
-    //         return ($var) ? true : false;
-    //     }));
-    // }
-
     /*
 
     The actual function for handling frontend repo requests.
@@ -56,6 +48,15 @@ class ACHController extends Controller
         if(!Validator::validate_frontend_config()) return $this->error_message;
         $ck = CK($slug);
         if (should_we_cache($ck)) return CookieHelper::insertToken(Cache::get($ck));
+
+        $multilingual = $this->checkMultilingual($req);
+        if ($multilingual['redirect'])
+        {
+            return redirect($multilingual['redirect_path']);
+        }
+        $query = $multilingual['query'];
+
+        $this->trackingHits();
 
         try {
             $front = conf('frontend_repo_url');
@@ -173,75 +174,96 @@ class ACHController extends Controller
         ];
     }
 
+    //store hit and write hit_id in cookie
+    public function trackingHits()
+    {
+        if (!config('api_configs.tracking_hits'))
+        {
+            return;
+        }
+        $data = [
+            'rt' => array_get($input, 'rt', null),
+            'app_id' => config('api_configs.client_id')
+        ];
+        $url = config('api_configs.secret_url') . '/hits';
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        $hit_id = 0;
+        if ($response)
+        {
+            $hit_id = $response->data->id;
+        }
+
+        return \Cookie::queue('hit_id', $res->id, time()+60*60*24*30, '/');
+    }
+
+    public function checkMultilingual($request)
+    {
+        if (!config('api_configs.is_multilingual'))
+        {
+            return [
+                'redirect' => false,
+                'query' => []
+            ];
+        }
+
+        //getting language from url
+        $main_language = env('MAIN_LANGUAGE') ? env('MAIN_LANGUAGE') : 'en';
+        $requested_language = $request->segment(0);
+        $requested_language = in_array($requested_language, config('api_configs.languages')) ? $requested_language : $main_language;
+
+        //if user tries to change language via switcher rewrite user_language cookie
+        if ($request->input('change_lang'))
+        {
+            setcookie('user_language', $request->input('change_lang'), time() + 60 * 30, '/');
+            $_COOKIE['user_language'] = $request->input('change_lang');
+            if ($requested_language !== $request->input('change_lang'))
+            {
+                $redirect_path = $request->input('change_lang') == $main_language ? '/' : '/' . $request->input('change_lang') . '/ ';
+                return [
+                    'redirect' => true,
+                    'redirect_path' => $redirect_path
+                ];
+            }
+        }
+
+        //rewriting user_language on home page
+        if ($request->get('l') == $main_language)
+        {
+            setcookie('user_language', $main_language, time() + 60 * 30, '/');
+        }
+
+        //if user_language cookie not found getting it from Accept-Language header
+        if (!array_key_exists("user_language", $_COOKIE))
+        {
+            $user_language = substr(locale_accept_from_http($request->header('accept-language')), 0, 2);
+            $user_language = in_array($user_language, config('api_configs.languages')) ? $user_language : $main_language;
+            setcookie('user_language', $user_language, time() + 60 * 30, '/');
+            $_COOKIE['user_language'] = $user_language;
+        }
+
+        //if user_language differs from requested language then redirecting on user_language page
+        if ($request->path() == '/' && $request->get('l') !== $main_language && $requested_language !== $_COOKIE['user_language'])
+        {
+            return [
+                'redirect' => true,
+                'redirect_path' => $_COOKIE['user_language'] == $main_language ? '/' : '/' . $_COOKIE['user_language'] . '/ '
+            ];
+        }
+
+        return [
+            'redirect' => false,
+            'query' => [
+                'lang' => $requested_language,
+                'main_language' => env('MAIN_LANGUAGE')
+            ]
+        ];
+    }
+
 }
-
-// if (array_search(parse_url($domain)['host'], conf('multilingualSites')) !== false)
-// {
-//     //getting language from url
-//     $url_segments = $this->splitUrlIntoSegments($req->path());
-//     $main_language = conf('main_language') ? conf('main_language') : 'en';
-//     $language_from_url = array_get($url_segments, 0, $main_language);
-//     $language_from_url = gettype(array_search($language_from_url, conf('languages'))) == 'integer' ? $language_from_url : $main_language;
-
-//     //if user tries to change language via switcher rewrite language_from_request cookie
-//     if ($req->input('change_lang'))
-//     {
-//         setcookie('language_from_request', $req->input('change_lang'), time() + 60 * 30, '/');
-//         $_COOKIE['language_from_request'] = $req->input('change_lang');
-//         if ($language_from_url !== $req->input('change_lang'))
-//         {
-//             return redirect($req->input('change_lang') == $main_language ? '/' : '/' . $req->input('change_lang') . '/ ');
-//         }
-//     }
-//     if ($req->get('l') == $main_language)
-//     {
-//         setcookie('language_from_request', $main_language, time() + 60 * 30, '/');
-//         $query = [
-//             'lang' => $main_language,
-//             'main_language' => conf('main_language')
-//         ];
-//     }
-//     if ($slug == '/' && $req->get('l') !== $main_language)
-//     {
-//         if (!array_key_exists("language_from_request", $_COOKIE))
-//         {
-//             //setting language_from_request cookie from accept-language
-//             $language_from_request = substr(locale_accept_from_http($req->header('accept-language')), 0, 2);
-//             $language_from_request = gettype(array_search($language_from_request, conf('languages'))) == 'boolean' ? $main_language : $language_from_request;
-//             setcookie('language_from_request', $language_from_request, time() + 60 * 30, '/');
-//             if ($language_from_url !== $language_from_request)
-//             {
-//                 return redirect($language_from_request == $main_language ? '/' : '/' . $language_from_request . '/ ');
-//             }
-//         }
-//         else
-//         {
-//             if ($language_from_url !== $_COOKIE['language_from_request'])
-//             {
-//                 return redirect($_COOKIE['language_from_request'] == $main_language ? '/' : '/' . $_COOKIE['language_from_request'] . '/ ');
-//             }
-//         }
-//     }
-//     $query = [
-//         'lang' => $language_from_url,
-//         'main_language' => conf('main_language')
-//     ];
-// }
-
-
-
-// tracking hits shit
-
-// if (conf('tracking_hits'))
-// {
-//     //store hit and write hit_id in cookie
-//     $hitsQuery = [
-//         'rt' => array_get($input, 'rt', null),
-//         'app_id' => conf('client_id'),
-//     ];
-//     //TODO rewrite hits tracking.
-//     $query = conf('secret_url') . '/hits/?' . http_build_query($hitsQuery);
-//     $res = file_get_contents($query, false, stream_context_create(arrContextOptions()));
-//     $res = json_decode($res)->data;
-//     \Cookie::queue('hit_id', $res->id, time()+60*60*24*30, '/');
-// }
