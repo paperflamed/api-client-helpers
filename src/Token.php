@@ -140,6 +140,12 @@ class Token
             setcookie('user_language', $user_language, time() + 60 * 30, '/');
             $_COOKIE['user_language'] = $user_language;
         }
+        $change_language = request()->get('change_lang', null);
+        if ($change_language)
+        {
+            setcookie('user_language', $change_language, time() + 60 * 30, '/');
+            $_COOKIE['user_language'] = $change_language;
+        }
         return [
             'lang' => $_COOKIE['user_language'],
             'main_language' => $main_language
