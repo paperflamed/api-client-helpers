@@ -121,6 +121,28 @@ class Token
             'client_id' => config('api_configs.client_id'),
             'client_secret' => config('api_configs.client_secret'),
         ];
+        $form_params = array_merge($form_params, $this->multilingualQuery());
         return config('api_configs.secret_url').'/oauth/access_token'.'?'.http_build_query($form_params);
+    }
+
+    public function multilingualQuery()
+    {
+        if (!config('api_configs.is_multilingual'))
+        {
+            return [];
+        }
+        $main_language = config('api_configs.main_language');
+        //if user_language cookie not found getting it from Accept-Language header
+        if (!array_key_exists("user_language", $_COOKIE))
+        {
+            $user_language = substr(locale_accept_from_http(request()->header('accept-language')), 0, 2);
+            $user_language = in_array($user_language, config('api_configs.languages')) ? $user_language : $main_language;
+            setcookie('user_language', $user_language, time() + 60 * 30, '/');
+            $_COOKIE['user_language'] = $user_language;
+        }
+        return [
+            'lang' => $_COOKIE['user_language'],
+            'main_language' => $main_language
+        ];
     }
 }
