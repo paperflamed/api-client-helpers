@@ -32,9 +32,13 @@ class Token
 
     protected function getFromBootstrap($query)
     {   
-        
-
         $cache_key = 'bootstrap_data_from_api';
+        if (config('api_configs.is_multilingual')) //if we have many languages then add user language to cache key
+        {
+            $query_array = [];
+            parse_str(parse_url($query, PHP_URL_QUERY), $query_array);
+            $cache_key .= '_' . $query_array['lang'];
+        }
         // if (false) 
         if (Cache::has($cache_key)) 
         {
@@ -143,6 +147,7 @@ class Token
         $change_language = request()->get('change_lang', null);
         if ($change_language)
         {
+            $change_language = in_array($change_language, config('api_configs.languages')) ? $change_language : $main_language;
             setcookie('user_language', $change_language, time() + 60 * 30, '/');
             $_COOKIE['user_language'] = $change_language;
         }
