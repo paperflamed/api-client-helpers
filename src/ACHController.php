@@ -366,12 +366,7 @@ class ACHController extends Controller
         //getting language from url
         $main_language = config('api_configs.main_language');
         $requested_language = $request->segment(1);
-        if (!in_array($requested_language, config('api_configs.languages')))
-        {
-            $requested_language = $main_language;
-            setcookie('user_language', $main_language, time() + 60 * 30, '/');
-            $_COOKIE['user_language'] = $main_language;
-        }
+        $requested_language = in_array($requested_language, config('api_configs.languages')) ? $requested_language : $main_language;
 
         //if user tries to change language via switcher rewrite user_language cookie
         $change_language = $request->input('change_lang');
@@ -402,6 +397,13 @@ class ACHController extends Controller
             $user_language = in_array($user_language, config('api_configs.languages')) ? $user_language : $main_language;
             setcookie('user_language', $user_language, time() + 60 * 30, '/');
             $_COOKIE['user_language'] = $user_language;
+        }
+
+        //if user_language isn't in allowed languages than set user_language = main_language
+        if (!in_array($_COOKIE['user_language'], config('api_configs.languages')))
+        {
+            setcookie('user_language', $main_language, time() + 60 * 30, '/');
+            $_COOKIE['user_language'] = $main_language;
         }
 
         //if user_language differs from requested language then redirecting on user_language page
