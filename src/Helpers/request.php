@@ -23,7 +23,11 @@ function apiRequestProxy(Request $request)
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
     curl_setopt($ch, CURLOPT_HEADER, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Accept-Language: '.$request->header('Accept-Language')]);
+    $headers =  [
+                    'Accept-Language: '.$request->header('Accept-Language'),
+                    'User-Agent: '.$request->header('user-agent'),
+                ];
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
     curl_setopt($ch, CURLOPT_COOKIE, $cookie_string);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
