@@ -141,14 +141,14 @@ class Token
         {
             $user_language = substr(locale_accept_from_http(request()->header('accept-language')), 0, 2);
             $user_language = in_array($user_language, config('api_configs.languages')) ? $user_language : $main_language;
-            setcookie('user_language', $user_language, time() + 60 * 30, '/');
+            setcookie('user_language', $user_language, time() + 60 * 60 * 24 * 365 * 5, '/');
             $_COOKIE['user_language'] = $user_language;
         }
         $change_language = request()->get('change_lang', null);
         if ($change_language)
         {
             $change_language = in_array($change_language, config('api_configs.languages')) ? $change_language : $main_language;
-            setcookie('user_language', $change_language, time() + 60 * 30, '/');
+            setcookie('user_language', $change_language, time() + 60 * 60 * 24 * 365 * 5, '/');
             $_COOKIE['user_language'] = $change_language;
         }
         return [
